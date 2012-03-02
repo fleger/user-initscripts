@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# user-initscripts hooks
+
+init_user_daemons_hook() {
+  install -m775 -d /run/user-daemons
+  chown root:users /run/user-daemons
+}
+
+stop_user_daemons_hook() {
+  local user
+  for user in /run/user-daemons/*; do
+    [ -d "$user" ] || continue
+    su "$(basename "$user")" -c '/usr/sbin/user-rc.d stop_all'
+  done
+}
+
+add_hook multi_end init_user_daemons_hook
+add_hook shutdown_start stop_user_daemons_hook

@@ -1,0 +1,78 @@
+user-initscripts
+================
+
+user-initscripts is a user daemon system based on and relying upon the Arch Linux initscripts
+system.
+
+User daemons
+------------
+
+User daemons are similar to the system daemons, except they can be run by unprivileged users.
+Like system daemons, user daemons are controled by dedicated scripts.
+user-initscripts is very similar in design to the Arch Linux initscripts.
+
+The following table shows the equivalences between the elements of the two systems.
+
+| **initscripts**                   | **user-initscripts**                              |
+|-----------------------------------|---------------------------------------------------|
+| `/etc/rc.conf`                    | `$XDG_CONFIG_HOME/user-rc.conf`                   |
+| `/etc/rc.d`                       | `$XDG_CONFIG_HOME/user-rc.d` and `/etc/user-rc.d` |
+| `/etc/rc.d/functions`             | `/etc/user-rc.d/functions`                        |
+| `/usr/sbin/rc.d`                  | `/usr/sbin/user-rc.d`                             |
+
+
+All the started daemons are properly stopped when the system shuts down.
+
+
+It is also possible to have daemons automatically started when a user session starts.
+
+Daemon scripts
+--------------
+
+The daemon scripts search path is `$XDG_CONFIG_HOME/user-rc.d:/etc/user-rc.d`, so it is suitable for
+both package-provided scripts and user-provided scripts.
+
+
+See https://gist.github.com/1960771 for an example.
+
+
+The files `/etc/rc.conf`, `/etc/rc.d/functions` *and* `/etc/user-rc.d/functions` *must* be sourced
+by the script.
+
+The user-rc.d command
+---------------------
+
+The `user-rc.d` command has the same role and the same syntax as the `rc.d` command, but with two
+additionnal actions:
+
+ * `user-rc.d autostart` starts the daemons of the `USER_DAEMONS` array from the `user-rc.conf`
+   file,
+ * `user-rc.d stop_all` stops all the running daemons.
+
+Autostarting daemons
+--------------------
+Automatically started daemons must be put in the `USER_DAEMONS` array of the
+`$XDG_CONFIG_HOME/user-rc.conf` file. A template of this file can be found in
+`/usr/share/user-initscripts/examples`.
+
+A call of `user-rc.d autostart` when the user session starts will start these daemons.
+Because of the wide variety of shells and desktop environnements available, this step is left to the
+user.
+
+For instance, if you use bash you might want to put `/usr/sbin/user-rc.d autostart` in your
+`~/.bash_profile`, so that daemons are automatically started when you enter a login shell.
+
+With KDE, you might want to add the following script in `$(kde-config --localprefix)/Autostart`:
+
+    #!/bin/sh
+    /usr/sbin/user-rc.d autostart
+
+You may also want to stop the daemons when you close your session by adding the following script in
+`$(kde-config --localprefix)/shutdown)`:
+
+    #!/bin/sh
+    /usr/sbin/user-rc.d stop_all
+
+Be careful with that last script because if you have multiple sessions, the daemons will be stopped
+as soon as the first session is closed.
+

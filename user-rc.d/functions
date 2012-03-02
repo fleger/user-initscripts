@@ -1,0 +1,97 @@
+#!/bin/bash
+# user-initscripts functions
+#
+
+# daemons:
+
+USER_CONFIG=${XDG_CONFIG_HOME:-${HOME}/.config}
+
+add_user_daemon() {
+  [[ -d "/run/user-daemons/${USER}" ]] ||
+  install -m755 -d "/run/user-daemons/${USER}"
+  >| "/run/user-daemons/${USER}/$1"
+}
+
+rm_user_daemon() {
+  rm -f "/run/user-daemons/${USER}/$1"
+}
+
+ck_user_daemon() {
+  [[ ! -f "/run/user-daemons/${USER}/$1" ]]
+}
+
+# Check if $1 is a valid user daemon name
+have_user_daemon() {
+  [[ -f "/etc/user-rc.d/$1" && -x "/etc/user-rc.d/$1" ]] ||
+  [[ -f "${USER_CONFIG}/user-rc.d/$1" && -x "${USER_CONFIG}/user-rc.d/$1" ]]
+}
+
+# Return the full path of a user init script
+which_user_daemon() {
+  [[ -f "${USER_CONFIG}/user-rc.d/$1" && -x "${USER_CONFIG}/user-rc.d/$1" ]] && {
+    echo "${USER_CONFIG}/user-rc.d/$1"
+    return 0
+  }
+  [[ -f "/etc/user-rc.d/$1" && -x "/etc/user-rc.d/$1" ]] && {
+    echo "/etc/user-rc.d/$1"
+    return 0
+  }
+  return 1
+}
+
+# Check if $1 is started at session login
+ck_user_autostart() {
+  local daemon
+  for daemon in "${USER_DAEMONS[@]}"; do
+    [[ $1 = "${daemon#@}" ]] && return 1
+  done
+  return 0
+}
+
+start_user_daemon() {
+  have_user_daemon "$1" && "$(which_user_daemon "$1")" start
+}
+
+# Never use this function, it causes daemons to be stoped in the wrong order.
+# The only way to start a daemon at login is to add it to the USER_DAEMONS array.
+ck_user_depends() {
+  local daemon
+  for daemon; do
+    ck_user_daemon "$daemon" && start_user_daemon "$daemon"
+  done
+}
+
+start_user_daemon_bkgd() {
+  stat_bkgd "Starting $1"
+  (start_user_daemon "$1") >/dev/null &
+}
+
+stop_user_daemon() {
+  have_user_daemon "$1" && "$(which_user_daemon "$1")" stop
+}
+
+# Status functions
+ck_user_status() {
+  ! ck_user_daemon "$1" && status_started || status_stopped
+}
+
+# Stop all user daemons
+# This function should *never* ever perform any other actions beside calling stop_user_daemon()!
+# It might be used by a splash system etc. to get a list of daemons to be stopped.
+stop_all_user_daemons() {
+  # Find daemons NOT in the USER_DAEMONS array. Shut these down first
+  local daemon
+  for daemon in "/run/user-daemons/${USER}"; do
+    [[ -f $daemon ]] || continue
+    daemon=${daemon##*/}
+    ck_user_autostart "$daemon" && stop_user_daemon "$daemon"
+  done
+
+  # Shutdown daemons in reverse order
+  local i daemon
+  for (( i=${#USER_DAEMONS[@]}-1; i>=0; i-- )); do
+    [[ ${USER_DAEMONS[i]} = '!'* ]] && continue
+    daemon=${USER_DAEMONS[i]#@}
+    ck_user_daemon "$daemon" || stop_user_daemon "$daemon"
+  done
+}
