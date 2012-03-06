@@ -99,7 +99,7 @@ ck_user_status() {
 stop_all_user_daemons() {
   # Find daemons NOT in the USER_DAEMONS array. Shut these down first
   local daemon
-  for daemon in "/run/user-daemons/${USER}"; do
+  for daemon in "/run/user-daemons/${USER}"/*; do
     [[ -f $daemon ]] || continue
     daemon=${daemon##*/}
     ck_user_autostart "$daemon" &&
