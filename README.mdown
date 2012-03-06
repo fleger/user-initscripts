@@ -43,7 +43,7 @@ The user-rc.d command
 ---------------------
 
 The `user-rc.d` command has the same role and the same syntax as the `rc.d` command, but with two
-additionnal actions:
+additional actions:
 
  * `user-rc.d autostart` starts the daemons of the `USER_DAEMONS` array from the `user-rc.conf`
    file,
@@ -64,15 +64,58 @@ For instance, if you use bash you might want to put `/usr/sbin/user-rc.d autosta
 
 With KDE, you might want to add the following script in `$(kde-config --localprefix)/Autostart`:
 
-    #!/bin/sh
-    /usr/sbin/user-rc.d autostart
+```shell
+#!/bin/sh
+/usr/sbin/user-rc.d autostart
+```
 
 You may also want to stop the daemons when you close your session by adding the following script in
 `$(kde-config --localprefix)/shutdown)`:
 
-    #!/bin/sh
-    /usr/sbin/user-rc.d stop_all
+```shell
+#!/bin/sh
+/usr/sbin/user-rc.d stop_all
+```
 
 Be careful with that last script because if you have multiple sessions, the daemons will be stopped
-as soon as the first session is closed.
+as soon as the first session is closed. If you want to close the daemons only when your last session
+closes, use the following bash code snippet instead:
 
+```shell
+#!/bin/bash
+
+# Test if the current ConsoleKit session is the last user session
+isLastUserSession() {
+  local currentSession=""
+  local -a sessions=()
+  local line=""
+  local -r sessionRE='^object path "(.+)"$'
+
+  # Get current session
+  while read line; do
+    [[ "$line" =~ $sessionRE ]] &&
+    currentSession="${BASH_REMATCH[1]}"
+  done < <(dbus-send --system --print-reply --dest=org.freedesktop.ConsoleKit \
+                     /org/freedesktop/ConsoleKit/Manager                      \
+                     org.freedesktop.ConsoleKit.Manager.GetCurrentSession)
+  
+  # Not in a ConsoleKit session
+  [[ -z "$currentSession" ]] && return 2
+
+  # Get all user sessions
+  while read line; do
+    [[ "$line" =~ $sessionRE ]] &&
+    sessions+=("${BASH_REMATCH[1]}")
+  done < <(dbus-send --system --print-reply --dest=org.freedesktop.ConsoleKit \
+                     /org/freedesktop/ConsoleKit/Manager                      \
+                     org.freedesktop.ConsoleKit.Manager.GetSessionsForUser "uint32:$UID")
+
+  [[ "${#sessions[@]}" -eq 1 ]] &&
+  [[ "${sessions[0]}" == "$currentSession" ]] &&
+  return 0 ||
+  return 1
+}
+ 
+isLastUserSession &&
+/usr/sbin/user-rc.d stop_all 
+```
