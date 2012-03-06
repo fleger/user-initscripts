@@ -5,8 +5,10 @@ NEED_ROOT=0 # this script can be run without be root
 . /etc/rc.d/functions
 . /etc/user-rc.d/functions
 
-USER_DAEMONS=()
-[ -f "${USER_CONFIG}/user-rc.conf" ] && . "${USER_CONFIG}/user-rc.conf"
+declare -a USER_DAEMONS=()
+declare -A USER_DAEMON_TAGS=()
+
+[[ -f "${USER_CONFIG}/user-rc.conf" ]] && . "${USER_CONFIG}/user-rc.conf"
 
 # print usage and exit
 usage() {
@@ -15,10 +17,11 @@ usage() {
 usage: $name <action> [options] [daemons]
 
 options:
-  -s, --started     Filter started daemons
-  -S, --stopped     Filter stopped daemons
-  -a, --auto        Filter auto started daemons
-  -A, --noauto      Filter manually started daemons
+  -s, --started         Filter started daemons
+  -S, --stopped         Filter stopped daemons
+  -a, --auto            Filter auto started daemons
+  -A, --noauto          Filter manually started daemons
+  -t, --tag <tag>       Filter by tag, may be used multiple times, use !tag to filter by tag absence
 
 <daemons> is a space separated list of script in /etc/user-rc.d and ${USER_CONFIG}/user-rc.d
 <action> can be a start, stop, restart, reload, status, ...
@@ -27,10 +30,12 @@ stop_all stops all the running daemons.
 WARNING: user-initscripts are free to implement or not the above actions.
 
 e.g: $name list
+     $name -t persistent list
      $name list sshd gpm
      $name list --started gpm
      $name start sshd gpm
      $name stop_all
+     $name -t '!persistent' stop_all
      $name autostart
      $name help
 EOF
@@ -52,6 +57,7 @@ not exist or is not executable.${C_CLEAR}\n" >&2
     (( ${filter[stopped]} )) && ! ck_user_daemon "$daemon" && continue
     (( ${filter[auto]} )) && ck_user_autostart "$daemon" && continue
     (( ${filter[noauto]} )) && ! ck_user_autostart "$daemon" && continue
+    [ -n "${filter[tag]}" ] && ! ck_user_tag "$daemon" ${filter[tag]} && continue
     new_daemons+=("$daemon")
   done
   daemons=("${new_daemons[@]}")
@@ -81,7 +87,7 @@ declare -a daemons=()
 declare -A filter=([started]=0 [stopped]=0 [auto]=0 [noauto]=0)
 
 # parse options
-argv=$(getopt -l 'started,stopped,auto,noauto' -- 'sSaA' "$@") || usage
+argv=$(getopt -l 'started,stopped,auto,noauto,tag:' -- 'sSaAt:' "$@") || usage
 eval set -- "$argv"
 
 # create an initial daemon list
@@ -91,6 +97,7 @@ while [[ "$1" != -- ]]; do
     -S|--stopped)   filter[stopped]=1 ;;
     -a|--auto)      filter[auto]=1 ;;
     -A|--noauto)    filter[noauto]=1 ;;
+    -t|--tag)       filter[tag]+="$2 "; shift;;
   esac
   shift
 done
@@ -127,20 +134,24 @@ case $action in
       else
         s_auto="${C_OTHER}[${C_FAIL}    ${C_OTHER}]"
       fi
-      printf "$s_status$s_auto${C_CLEAR} $daemon\n"
+      s_tags=""
+      for tag in ${USER_DAEMON_TAGS[$daemon]}; do
+        s_tags+="${C_OTHER}[${C_H1}${tag}${C_OTHER}]"
+      done
+      printf "$s_status$s_auto${C_CLEAR} $daemon \t$s_tags${C_CLEAR}\n"
     done
   ;;
   autostart)
     for daemon in "${USER_DAEMONS[@]}"; do
       case ${daemon:0:1} in
         '!') continue;;     # Skip this daemon.
-        '@') start_user_daemon_bkgd "${daemon#@}";;
-        *)   start_user_daemon "$daemon";;
+        '@') ck_user_tag "${daemon#@}" ${filter[tag]} && start_user_daemon_bkgd "${daemon#@}";;
+        *)   ck_user_tag "$daemon" ${filter[tag]} && start_user_daemon "$daemon";;
       esac
     done
   ;;
   stop_all)
-    stop_all_user_daemons
+    stop_all_user_daemons ${filter[tag]}
   ;;
   *)
     # other actions need an explicit daemons list

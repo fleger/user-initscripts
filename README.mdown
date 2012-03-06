@@ -42,12 +42,22 @@ by the script.
 The user-rc.d command
 ---------------------
 
-The `user-rc.d` command has the same role and the same syntax as the `rc.d` command, but with two
-additional actions:
+The `user-rc.d` command has basically the same role and the same syntax as the `rc.d` command,
+but with a few differences:
 
  * `user-rc.d autostart` starts the daemons of the `USER_DAEMONS` array from the `user-rc.conf`
    file,
- * `user-rc.d stop_all` stops all the running daemons.
+ * `user-rc.d stop_all` stops all the running daemons,
+ * The --tag <tag> option allows to filter the targeted deamons by tag.
+
+Tagging
+-------
+
+One feature introduced in user-initscripts is deamon tagging.
+Daemons can be tagged by modifying the `USER_DAEMON_TAGS` associative array in the
+`$XDG_CONFIG_HOME/user-rc.conf` file.
+Tagged daemons can be easily autostarted and stopped by `user-rc.d`.
+Tags are user-defined.
 
 Autostarting daemons
 --------------------
@@ -78,44 +88,7 @@ You may also want to stop the daemons when you close your session by adding the 
 ```
 
 Be careful with that last script because if you have multiple sessions, the daemons will be stopped
-as soon as the first session is closed. If you want to close the daemons only when your last session
-closes, use the following bash code snippet instead:
+as soon as the first session is closed.
 
-```shell
-#!/bin/bash
-
-# Test if the current ConsoleKit session is the last user session
-isLastUserSession() {
-  local currentSession=""
-  local -a sessions=()
-  local line=""
-  local -r sessionRE='^object path "(.+)"$'
-
-  # Get current session
-  while read line; do
-    [[ "$line" =~ $sessionRE ]] &&
-    currentSession="${BASH_REMATCH[1]}"
-  done < <(dbus-send --system --print-reply --dest=org.freedesktop.ConsoleKit \
-                     /org/freedesktop/ConsoleKit/Manager                      \
-                     org.freedesktop.ConsoleKit.Manager.GetCurrentSession)
-  
-  # Not in a ConsoleKit session
-  [[ -z "$currentSession" ]] && return 2
-
-  # Get all user sessions
-  while read line; do
-    [[ "$line" =~ $sessionRE ]] &&
-    sessions+=("${BASH_REMATCH[1]}")
-  done < <(dbus-send --system --print-reply --dest=org.freedesktop.ConsoleKit \
-                     /org/freedesktop/ConsoleKit/Manager                      \
-                     org.freedesktop.ConsoleKit.Manager.GetSessionsForUser "uint32:$UID")
-
-  [[ "${#sessions[@]}" -eq 1 ]] &&
-  [[ "${sessions[0]}" == "$currentSession" ]] &&
-  return 0 ||
-  return 1
-}
- 
-isLastUserSession &&
-/usr/sbin/user-rc.d stop_all 
+More advanced code snippets can be found in `/usr/share/user-initscripts/examples`.
 ```

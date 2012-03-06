@@ -1,6 +1,9 @@
 #!/bin/bash
 # user-initscripts functions
-#
+
+# Requires: /etc/rc.conf
+#           /etc/rc.d/functions
+#           $XDG_CONFIG_HOME/user-rc.conf
 
 # daemons:
 
@@ -48,6 +51,21 @@ ck_user_autostart() {
   return 0
 }
 
+# Check if daemon $1 is tagged with $2 and $3 and ...
+ck_user_tag() {
+  local tag
+  local daemon="$1"
+  shift
+
+  for tag; do
+    case "${tag:0:1}" in
+      '!')  in_array "${tag#!}" ${USER_DAEMON_TAGS["$daemon"]} && return 1;;
+      *)    in_array "$tag" ${USER_DAEMON_TAGS["$daemon"]} || return 1;;
+    esac
+  done
+  return 0
+}
+
 start_user_daemon() {
   have_user_daemon "$1" && "$(which_user_daemon "$1")" start
 }
@@ -75,7 +93,7 @@ ck_user_status() {
   ! ck_user_daemon "$1" && status_started || status_stopped
 }
 
-# Stop all user daemons
+# Stop all tagged user daemons
 # This function should *never* ever perform any other actions beside calling stop_user_daemon()!
 # It might be used by a splash system etc. to get a list of daemons to be stopped.
 stop_all_user_daemons() {
@@ -84,7 +102,9 @@ stop_all_user_daemons() {
   for daemon in "/run/user-daemons/${USER}"; do
     [[ -f $daemon ]] || continue
     daemon=${daemon##*/}
-    ck_user_autostart "$daemon" && stop_user_daemon "$daemon"
+    ck_user_autostart "$daemon" &&
+    ck_user_tag "$daemon" $@ &&
+    stop_user_daemon "$daemon"
   done
 
   # Shutdown daemons in reverse order
@@ -92,6 +112,9 @@ stop_all_user_daemons() {
   for (( i=${#USER_DAEMONS[@]}-1; i>=0; i-- )); do
     [[ ${USER_DAEMONS[i]} = '!'* ]] && continue
     daemon=${USER_DAEMONS[i]#@}
-    ck_user_daemon "$daemon" || stop_user_daemon "$daemon"
+    ck_user_daemon "$daemon" || {
+      ck_user_tag "$daemon" $@ &&
+      stop_user_daemon "$daemon"
+    }
   done
 }
