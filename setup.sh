@@ -18,4 +18,7 @@ install -Dm644  "${SRC_DIR}/hooks/user-initscripts" \
 install -Dm644  "${SRC_DIR}/user-rc.d/functions" \
                 "${DEST_DIR}/etc/user-rc.d/functions"
 
+install -Dm644  "${SRC_DIR}/tmpfiles.d/user-initscripts.conf" \
+                "${DEST_DIR}/usr/lib/tmpfiles.d/user-initscripts.conf"
+
 install -m775 -d "${DEST_DIR}/run/user-daemons"
