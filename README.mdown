@@ -91,4 +91,4 @@ Be careful with that last script because if you have multiple sessions, the daem
 as soon as the first session is closed.
 
 More advanced code snippets can be found in `/usr/share/user-initscripts/examples`.
-```
+
