@@ -8,6 +8,7 @@
 # daemons:
 
 USER_CONFIG=${XDG_CONFIG_HOME:-${HOME}/.config}
+: ${USER:=$LOGNAME}
 
 add_user_daemon() {
   [[ -d "/run/user-daemons/${USER}" ]] ||
